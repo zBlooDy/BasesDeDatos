@@ -2,8 +2,8 @@
 -- PUNTO 8 --
 -------------
 
-/*Mostrar para el o los artículos que tengan stock en todos los depósitos, 
-nombre del artículo, stock del depósito que más stock tiene. */
+/*Mostrar para el o los artï¿½culos que tengan stock en todos los depï¿½sitos, 
+nombre del artï¿½culo, stock del depï¿½sito que mï¿½s stock tiene. */
 
 -- Primera opcion que se me ocurrio, hay un SELECT de mas en realidad, y es el de stoc_producto
 SELECT  prod_detalle, MAX(stoc_cantidad)
@@ -22,13 +22,16 @@ SELECT prod_detalle, MAX(stoc_cantidad)
 FROM Producto
 JOIN Stock ON prod_codigo = stoc_producto 					
 GROUP BY prod_detalle
-HAVING COUNT(*) = (SELECT COUNT(distinct(stoc_deposito))
-											FROM Stock)
+HAVING COUNT(*) = (SELECT COUNT(*)
+					FROM Deposito)
 
 
+-- Otra interpretacion de la consigna ==> Que tengan stock en todos los depositos que haya
 
-/*
-trae todos los productos 
-del stock
-donde stoc producto tenga
-*/
+SELECT prod_detalle, MAX(stoc_cantidad)
+FROM Producto
+JOIN Stock ON prod_codigo = stoc_producto 					
+GROUP BY prod_detalle
+HAVING MIN(stoc_cantidad) > 0
+
+
