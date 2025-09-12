@@ -11,39 +11,17 @@ cantidad de productos que lo componen.*/
 
 
 
-SELECT prod_detalle, prod_precio, 
-(
-    SELECT SUM(prod_precio * comp_cantidad)
-    FROM Producto
-    JOIN Composicion ON prod_codigo = comp_componente
-    GROUP BY comp_producto
-) 'Precio sumatoria de componentes'
-
+SELECT p.prod_detalle, p.prod_precio, SUM(prodcomponente.prod_precio * comp_cantidad)
 FROM Producto p
-JOIN Composicion ON prod_codigo = comp_producto
-
-GROUP BY prod_codigo, prod_detalle, prod_precio
+JOIN Composicion ON p.prod_codigo = comp_producto
+JOIN Producto prodcomponente ON prodcomponente.prod_codigo = comp_componente
+GROUP BY p.prod_codigo, p.prod_detalle, p.prod_precio
 HAVING COUNT(*) > 2
 ORDER BY COUNT(*) desc
 
 
+-- Esta opcion es mejor que la anterior porque la subquery que hacia no era estatica, sino que dinamica. Y ademas en teoria tenia mas FOR que meterle un join mas
 
 
 
-
-SELECT SUM(prod_precio * comp_cantidad)
-FROM Producto
-JOIN Composicion ON prod_codigo = comp_componente
-GROUP BY comp_producto
-
-
-select p_compuesto.prod_detalle,
-	p_compuesto.prod_precio,
-	sum(p_componente.prod_precio * comp_cantidad) 'Sumatoria de precios por la cantidad de los productos que lo componen'
-from producto p_compuesto
-	join composicion on comp_producto = prod_codigo
-	join producto p_componente on p_componente.prod_codigo = comp_componente
-group by p_compuesto.prod_detalle, p_compuesto.prod_precio
-having count(*) > 2
-order by count(*) desc
 
