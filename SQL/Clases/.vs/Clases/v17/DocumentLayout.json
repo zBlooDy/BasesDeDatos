@@ -1,0 +1,50 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\thg_7\\Desktop\\Carpetas\\Facu\\Tercero\\Bases_De_Datos\\SQL\\Clases\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\thg_7\\Desktop\\Carpetas\\Facu\\Tercero\\Bases_De_Datos\\SQL\\Punto_12.sql||{B5A506EB-11BE-4782-9A18-21265C2CA0B4}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\thg_7\\Desktop\\Carpetas\\Facu\\Tercero\\Bases_De_Datos\\SQL\\Punto_13.sql||{B5A506EB-11BE-4782-9A18-21265C2CA0B4}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Punto_13.sql - DESKTOP-37U9B22.GD2015C1 (DESKTOP-37U9B22\\thg_7 (51))",
+              "DocumentMoniker": "C:\\Users\\thg_7\\Desktop\\Carpetas\\Facu\\Tercero\\Bases_De_Datos\\SQL\\Punto_13.sql",
+              "RelativeDocumentMoniker": "..\\Punto_13.sql",
+              "ToolTip": "C:\\Users\\thg_7\\Desktop\\Carpetas\\Facu\\Tercero\\Bases_De_Datos\\SQL\\Punto_13.sql - DESKTOP-37U9B22.GD2015C1 (DESKTOP-37U9B22\\thg_7 (51))",
+              "RelativeToolTip": "..\\Punto_13.sql - DESKTOP-37U9B22.GD2015C1 (DESKTOP-37U9B22\\thg_7 (51))",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000826|",
+              "WhenOpened": "2025-09-16T14:06:46.711Z",
+              "EditorCaption": " - DESKTOP-37U9B22.GD2015C1 (DESKTOP-37U9B22\\thg_7 (51))"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Punto_12.sql - DESKTOP-37U9B22.GD2015C1 (DESKTOP-37U9B22\\thg_7 (70))",
+              "DocumentMoniker": "C:\\Users\\thg_7\\Desktop\\Carpetas\\Facu\\Tercero\\Bases_De_Datos\\SQL\\Punto_12.sql",
+              "RelativeDocumentMoniker": "..\\Punto_12.sql",
+              "ToolTip": "C:\\Users\\thg_7\\Desktop\\Carpetas\\Facu\\Tercero\\Bases_De_Datos\\SQL\\Punto_12.sql - DESKTOP-37U9B22.GD2015C1 (DESKTOP-37U9B22\\thg_7 (70))",
+              "RelativeToolTip": "..\\Punto_12.sql - DESKTOP-37U9B22.GD2015C1 (DESKTOP-37U9B22\\thg_7 (70))",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000826|",
+              "WhenOpened": "2025-09-16T14:06:09.486Z",
+              "EditorCaption": " - DESKTOP-37U9B22.GD2015C1 (DESKTOP-37U9B22\\thg_7 (70))"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

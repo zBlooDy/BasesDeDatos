@@ -11,29 +11,36 @@ ordenarse de mayor a menor por monto vendido del producto.*/
 
 SELECT prod_detalle, COUNT(distinct(fact_cliente)) '# CLIENTES', AVG(item_precio) 'IMPORTE PRECIO', 
 
-(SELECT COUNT(*)					
-FROM Stock
-WHERE stoc_producto = prod_codigo and stoc_cantidad > 0 
-),
+				(SELECT COUNT(*)					
+				FROM Stock
+				WHERE stoc_producto = prod_codigo and stoc_cantidad > 0),
 
-(SELECT SUM(stoc_cantidad)					
-FROM Stock
-WHERE stoc_producto = prod_codigo 
-)
+				ISNULL((SELECT SUM(stoc_cantidad)					
+				FROM Stock
+				WHERE stoc_producto = prod_codigo 
+				),0)
 
 FROM Producto
-LEFT JOIN Item_Factura ON item_producto = prod_codigo
+JOIN Item_Factura ON item_producto = prod_codigo
 JOIN Factura ON item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero
 WHERE prod_codigo IN
-					(SELECT prod_codigo
-					FROM Producto
-					LEFT JOIN Item_Factura ON item_producto = prod_codigo
+					(SELECT item_producto
+					FROM Item_Factura
 					JOIN Factura ON item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero
 					WHERE year(fact_fecha) = 2012
-					GROUP BY prod_codigo, prod_detalle
 					)
 GROUP BY prod_codigo, prod_detalle
-ORDER BY prod_detalle
+ORDER BY SUM(item_cantidad * item_precio)
+
+-- Estoy utilizando prod codigo para vincularme en el exterior, 
+-- si no lo pongo cuando hago el GROUP BY me quedo sin el prod_codigo
 
 
+-- Si da igual, es mejor hacerlo en el WHERE porque cuando haga el FOR para el
+-- GROUP BY ya son menos elementos
 
+
+-- La condicion va en el having cuando lo que condiciono es una funcion de GRUPO
+
+
+-- Si tengo 2 filas de item y 2 de stock, trae 4 veces, entonces suma 4 veces
