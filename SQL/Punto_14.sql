@@ -17,7 +17,7 @@ No se deberán visualizar NULLs en ninguna columna
 */
 
 
-SELECT clie_codigo, COUNT(fact_cliente) 'Veces que compro', isnull(AVG(fact_total),0) 'Promedio por compra', isnull(COUNT(distinct(item_producto)),0 ), isnull(MAX(fact_total),0)
+SELECT clie_codigo, COUNT(distinct fact_tipo+fact_numero+fact_sucursal) 'Veces que compro', isnull(AVG(fact_total),0) 'Promedio por compra', isnull(COUNT(distinct(item_producto)),0 ), isnull(MAX(fact_total),0)
 
 FROM Cliente
 LEFT JOIN Factura ON clie_codigo = fact_cliente AND year(fact_fecha) = (SELECT MAX(year(fact_fecha)) FROM Factura)
