@@ -12,9 +12,22 @@ los costos de cada uno de los items de dicha factura.
 */
 
 
-SELECT year(fact_fecha), COUNT(*) '# Facturas incorrectas', COUNT(distinct fact_cliente) '# Clientes afectados'
-FROM Factura 
-WHERE ABS(ABS(fact_total - fact_total_impuestos) - (SELECT SUM(item_cantidad * item_precio) FROM Item_Factura WHERE item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero GROUP BY item_tipo+item_sucursal+item_numero)) > 1
-GROUP BY year(fact_fecha)
+SELECT year(f1.fact_fecha), (SELECT COUNT(*) 
+						FROM Factura f2
+						WHERE year(f2.fact_fecha) = year(f1.fact_fecha)
+						AND ((f2.fact_total - f2.fact_total_impuestos) - (SELECT SUM(item_cantidad * item_precio)
+																			FROM Item_Factura
+																			WHERE item_tipo = f2.fact_tipo AND item_sucursal = f2.fact_sucursal AND item_numero = f2.fact_numero
+																			) > 1) 
+						) '# Facturas incorrectas',
+						(SELECT COUNT(distinct f2.fact_cliente) 
+						FROM Factura f2
+						WHERE year(f2.fact_fecha) = year(f1.fact_fecha)
+						AND ((f2.fact_total - f2.fact_total_impuestos) - (SELECT SUM(item_cantidad * item_precio)
+																			FROM Item_Factura
+																			WHERE item_tipo = f2.fact_tipo AND item_sucursal = f2.fact_sucursal AND item_numero = f2.fact_numero
+																			) > 1)) 
 
+FROM Factura f1
+GROUP BY year(f1.fact_fecha)
 
