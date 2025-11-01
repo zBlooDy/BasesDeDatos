@@ -63,7 +63,7 @@ SELECT year(f.fact_fecha), (SELECT TOP 1 comp_producto
 
 FROM Factura f
 GROUP BY year(f.fact_fecha)
-
+GO
 
 -- Version mas simple
 
