@@ -38,7 +38,7 @@ HAVING fact_vendedor IN (SELECT TOP 5 empl_codigo
                         ORDER BY (SELECT COUNT(*) FROM Cliente WHERE clie_vendedor = empl_codigo and clie_vendedor is not null) asc, SUM(item_cantidad * item_precio) desc)
 
 
-/* 2.   Dado el contexto inflacionario se tiene que aplicar un control en el cual nunca se permita vender un producto a un 
+/* 2. Dado el contexto inflacionario se tiene que aplicar un control en el cual nunca se permita vender un producto a un 
 precio que no esté entre 0%–5% del precio de venta del producto el mes anterior, ni tampoco que esté en más de un 50% el 
 precio del mismo producto que hace 12 meses atrás. Aquellos productos nuevos, o que no tuvieron ventas en meses anteriores 
 no debe considerar esta regla ya que no hay precio de referencia. */
@@ -50,11 +50,12 @@ BEGIN
     IF (SELECT COUNT(*) FROM Inserted i JOIN Factura f ON i.item_tipo+i.item_sucursal+i.item_numero = f.fact_tipo+f.fact_sucursal+f.fact_numero 
     WHERE i.item_producto IN (SELECT item_producto FROM Item_Factura 
                               JOIN Factura ON item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero 
-                              WHERE year(fact_fecha) = year(f.fact_fecha)-1) AND
-                               
+                              WHERE year(fact_fecha) = year(f.fact_fecha)-1) 
+                              AND 
                             i.item_producto IN (SELECT item_producto FROM Item_Factura 
                               JOIN Factura ON item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero 
-                              WHERE month(fact_fecha) = month(f.fact_fecha)-1)) > 0
+                              WHERE month(fact_fecha) = month(f.fact_fecha)-1)) 
+                              > 0
     BEGIN
         IF (SELECT COUNT(*) FROM Inserted i JOIN Factura f ON i.item_tipo+i.item_sucursal+i.item_numero = f.fact_tipo+f.fact_sucursal+f.fact_numero
                 WHERE dbo.cumpleControl(i.item_producto, f.fact_fecha, i.item_precio) = 0) > 0
@@ -72,7 +73,7 @@ BEGIN
     
     SELECT TOP 1 @precioAnioAnterior=item_precio FROM Item_Factura JOIN Factura ON item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero WHERE item_producto = @producto AND YEAR(fact_fecha) = YEAR(fact_fecha)-1
 
-    IF(@precio > 0.5 * @precioAnioAnterior OR ((@precio-@precioMesAnterior)/@precioMesAnterior)*100 < 0.05 )
+    IF(@precio < 0.5 * @precioAnioAnterior OR ((ABS(@precio-@precioMesAnterior))/@precioMesAnterior)*100 <= 0.05 )
         RETURN 1
     RETURN 0
 END
