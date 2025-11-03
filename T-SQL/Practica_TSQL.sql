@@ -176,23 +176,24 @@ verifique que no exista stock y si es así lo borre en caso contrario que emita 
 mensaje de error.
 */
 
-CREATE TRIGGER verificarBajaArticulo ON Producto INSTEAD OF DELETE 
-AS 
-BEGIN
-    DECLARE @producto char(8)
-    SELECT @producto=p. prod_codigo FROM Producto p  JOIN Deleted d ON p.prod_codigo = d.prod_codigo
-    
-    -- Me fijo si existe algun producto de los que borra (puede ser 1 o varios) que tenga stock
-    IF EXISTS(SELECT * FROM Stock JOIN Deleted ON stoc_producto = prod_codigo WHERE stoc_producto > 0 )
-        BEGIN
-            RAISERROR('El arituclo posee stock', 1, 1)
-        END
-    DELETE FROM Stock WHERE stoc_producto IN (SELECT prod_codigo from Deleted)
-    DELETE FROM Composicion WHERE comp_producto IN (SELECT prod_codigo from Deleted)
-    DELETE FROM Producto WHERE prod_codigo IN (SELECT prod_codigo from Deleted)
-END
 GO
+CREATE TRIGGER verificar_stock_producto ON Producto INSTEAD OF DELETE
+AS
+BEGIN
 
+	IF (SELECT COUNT(*) FROM Deleted d JOIN Stock ON d.prod_codigo = stoc_producto WHERE stoc_cantidad > 0) > 0
+		BEGIN
+			RAISERROR('El producto tiene stock, no se puede borrar',1,1)
+		END
+
+	DELETE FROM Stock WHERE stoc_producto IN (SELECT prod_codigo FROM Deleted)
+	DELETE FROM Item_Factura WHERE item_producto IN (SELECT prod_codigo FROM Deleted)
+	DELETE FROM Composicion WHERE comp_producto IN (SELECT prod_codigo FROM Deleted) OR comp_componente IN (SELECT prod_codigo FROM Deleted)
+	DELETE FROM Producto WHERE prod_codigo IN (SELECT prod_codigo FROM Deleted)
+
+END
+
+GO
 
 --------------
 -- PUNTO 11 --
@@ -200,33 +201,31 @@ GO
 
 /*
 Cree el/los objetos de base de datos necesarios para que 
-dado un código de empleado se retorne la cantidad de empleados que este tiene a su cargo (directa o indirectamente). Solo contar aquellos empleados (directos o indirectos) 
-que tengan un código mayor que su jefe directo. 
+dado un código de empleado se retorne la cantidad de empleados que este tiene a su cargo (directa o indirectamente). 
+Solo contar aquellos empleados (directos o indirectos) que tengan un código mayor que su jefe directo. 
 */
-
-
-CREATE FUNCTION cantidad_empleados (@jefe numeric(6))
-RETURNS INT
-AS 
-BEGIN
-    DECLARE @empleado numeric(6), @cantidad int
-    DECLARE c1 CURSOR FOR SELECT empl_codigo FROM Empleado WHERE empl_jefe = @jefe
-    open c1
-    fetch c1 into @empleado
-    SELECT @cantidad = 0
-    WHILE @@FETCH_STATUS = 0
-        BEGIN
-            SELECT @cantidad = @cantidad + 1 + dbo.cantidad_empleados(@empleado) -- Sumo 1 por el directo + los directos del empleado
-
-            fetch c1 into @empleado
-        END
-    CLOSE c1
-    DEALLOCATE c1
-
-    RETURN @cantidad
-END
 GO
 
+CREATE FUNCTION contar_empleados (@jefe numeric(8)) 
+RETURNS INT
+AS
+BEGIN
+	DECLARE @acumulador int, @empleado numeric(6)
+	SET @acumulador = 0
+	DECLARE cursorEmpleados CURSOR FOR (SELECT empl_codigo FROM Empleado WHERE empl_jefe = @jefe AND empl_codigo > @jefe)
+	OPEN cursorEmpleados
+	FETCH cursorEmpleados INTO @empleado
+	-- Si no tiene empleados, no entra al cursor y devuelve acumulador (esta en 0)
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		SET @acumulador = @acumulador + 1 + dbo.contar_empleados(@empleado)
+		FETCH cursorEmpleados INTO @empleado
+	END
+	CLOSE cursorEmpleados
+	DEALLOCATE cursorEmpleados
+	RETURN @acumulador
+
+END
 
 --------------
 -- PUNTO 12 --
@@ -242,37 +241,39 @@ es accedida por n aplicaciones de diferentes tipos y tecnologías
 No se conoce la cantidad de niveles de composición existentes (Tenes que buscar la comp directa o indirecta). 
 */
 
+GO
+CREATE TRIGGER verificar_comp_propia ON Composicion FOR INSERT
+AS
+BEGIN
+	IF(SELECT COUNT(*) FROM Inserted WHERE dbo.verificar_comp(comp_producto, comp_componente) = 1) > 0
+		ROLLBACK TRANSACTION
+END
+GO
 
-
-CREATE FUNCTION verificar_composicion(@producto char(8), @componente char(8)) 
+CREATE FUNCTION verificar_comp (@producto char(8), @componente char(8))
 RETURNS INT
 AS
 BEGIN
-    IF(@componente = @producto)
-        RETURN 1
-    declare @comp char(8)
-    DECLARE cursorComponentes CURSOR FOR SELECT comp_componente FROM Composicion WHERE comp_producto = @componente
-    OPEN cursorComponentes
-    FETCH cursorComponentes INTO @comp
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        IF(dbo.verificar_composicion(@producto, @comp) = 1)
-           RETURN 1
-        FETCH cursorComponentes INTO @comp
-    END
-    RETURN 0
+	DECLARE @compuesto INT
+	IF(@producto = @componente)
+		SET @compuesto = 1
+	ELSE
+		BEGIN
+			DECLARE @comp char(8)
+			DECLARE cursorComponentes CURSOR FOR (SELECT comp_componente FROM Composicion WHERE comp_producto = @componente)
+			OPEN cursorComponentes
+			FETCH cursorComponentes INTO @comp
+			WHILE @@FETCH_STATUS = 0
+			BEGIN
+				SET @compuesto = dbo.verificar_comp(@producto, @comp)
+				FETCH cursorComponentes INTO @comp
+			END
+			CLOSE cursorComponentes
+			DEALLOCATE cursorComponentes
+		END
 
-   END
-GO
-
-CREATE TRIGGER evitar_misma_comp ON Composicion FOR INSERT
-AS
-BEGIN
-    DECLARE @producto char(8), @componente char(8)
-    IF EXISTS (SELECT * FROM Inserted WHERE dbo.verificarComposicion(comp_producto, comp_componente) = 1)
-        ROLLBACK
+	RETURN @compuesto
 END
-GO
 
 
 --------------
