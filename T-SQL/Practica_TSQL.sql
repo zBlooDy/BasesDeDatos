@@ -274,7 +274,7 @@ BEGIN
 
 	RETURN @compuesto
 END
-
+GO
 
 --------------
 -- PUNTO 13 --
@@ -287,46 +287,44 @@ Se sabe que en la actualidad dicha regla se cumple y que la base de datos
 es accedida por n aplicaciones de diferentes tipos y tecnologías 
 */
 
+-- Si agrego un empleado a un jefe, el salario va a seguir siendo menor 
+-- Si actualizo un salario o saco a un empleado, puede ser que se modifique la regla
 
-
--- "La regla se cumple" --> No tengo  que cambiar nada 
-CREATE TRIGGER verificar_salario_jefe ON Empleado FOR DELETE, UPDATE
+CREATE TRIGGER verificar_sal_jefe ON Empleado FOR UPDATE, DELETE
 AS
 BEGIN
-    IF (SELECT COUNT(*) FROM Inserted) = 0
+    IF EXISTS (SELECT * FROM deleted)
         BEGIN
-            IF EXISTS (SELECT * FROM Deleted d where (SELECT empl_salario FROM Empleado WHERE empl_codigo = d.empl_jefe) > dbo.suma_salarios(d.empl_jefe) * 0.2)
-                ROLLBACK
+            IF EXISTS (SELECT * FROM Deleted d JOIN Empleado e ON d.empl_jefe = e.empl_codigo WHERE e.empl_salario > 0.2 * dbo.salarios_emp(e.empl_codigo))
+            ROLLBACK TRANSACTION
         END
-    ELSE
+    IF EXISTS (SELECT * FROM inserted)
         BEGIN
-            IF EXISTS (SELECT * FROM Inserted i where (SELECT empl_salario FROM Empleado WHERE empl_codigo = i.empl_jefe) > dbo.suma_salarios(i.empl_jefe) * 0.2)
-                ROLLBACK
+            IF EXISTS (SELECT * FROM Inserted i JOIN Empleado e ON i.empl_jefe = e.empl_codigo WHERE e.empl_salario > 0.2 * dbo.salarios_emp(e.empl_codigo))
+            ROLLBACK TRANSACTION
         END
 END
 GO
 
-
-
-CREATE FUNCTION suma_salarios (@jefe numeric(6))
-RETURNS numeric(12,2)
-AS 
+CREATE FUNCTION salarios_emp (@jefe char(6)) 
+RETURNS INT
+AS
 BEGIN
-    DECLARE @empleado numeric(6), @salarios numeric(12,2)
-    DECLARE c1 CURSOR FOR SELECT empl_codigo FROM Empleado WHERE empl_jefe = @jefe
-    open c1
-    fetch c1 into @empleado
-    SELECT @salarios = 0
-    WHILE @@FETCH_STATUS = 0
-        BEGIN
-            SELECT @salarios = @salarios + (SELECT empl_salario FROM Empleado WHERE empl_codigo = @empleado) + dbo.suma_salarios(@empleado) 
+	DECLARE @acumulador int, @empleado numeric(6), @salario numeric(12,2)
+	SET @acumulador = 0
+	DECLARE cursorEmpleados CURSOR FOR (SELECT empl_codigo, empl_salario FROM Empleado WHERE empl_jefe = @jefe)
+	OPEN cursorEmpleados
+	FETCH cursorEmpleados INTO @empleado, @salario
+	-- Si no tiene empleados, no entra al cursor y devuelve acumulador (esta en 0)
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		SET @acumulador = @acumulador + @salario + dbo.salarios_emp(@empleado)
+		FETCH cursorEmpleados INTO @empleado
+	END
+	CLOSE cursorEmpleados
+	DEALLOCATE cursorEmpleados
+	RETURN @acumulador
 
-            fetch c1 into @empleado
-        END
-    CLOSE c1
-    DEALLOCATE c1
-
-    RETURN @salarios
 END
 GO
 
@@ -342,57 +340,59 @@ que imprima la  fecha, que cliente, que productos y a qué precio se realizó la
 No se deberá permitir que dicho precio sea menor a la mitad de la suma de los componentes. 
 */
 
--- USO INSTEAD OF CUANDO TENGO QUE HACER PARA ALGUNOS CASOS 1 COSA Y PARA OTROS, OTRA COSA.
-CREATE TRIGGER ej_t14 ON Item_Factura INSTEAD OF INSERT
+
+CREATE TRIGGER compra_prod_comp ON Item_Factura INSTEAD OF INSERT
 AS
 BEGIN
     DECLARE @tipo char(1), @sucursal char(4), @numero char(8), @cliente char(6), @fecha smalldatetime, @producto char(8), @precio numeric(12,4), @cantidad numeric(12,2)
     DECLARE c1 CURSOR FOR SELECT item_tipo, item_sucursal, item_numero, fact_cliente, fact_fecha, item_producto, item_precio, item_cantidad
-    FROM Inserted  
+    FROM Inserted 
     JOIN Factura ON fact_tipo+fact_sucursal+fact_numero = item_tipo+item_sucursal+item_numero
-    OPEN C1
-    FETCH C1 INTO @tipo, @sucursal, @numero, @cliente, @fecha, @producto, @precio
+    OPEN c1
+    FETCH c1 INTO @tipo, @sucursal, @numero, @cliente, @fecha, @producto, @precio
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        IF(@precio > dbo.suma_precio_componentes(@producto)/ 2)
+        IF (@precio > dbo.suma_componentes(@producto) / 2)
             BEGIN
-                IF @precio < dbo.suma_precio_componentes(@producto)
-                BEGIN
-                    SELECT @fecha, @cliente, @producto, @precio
-                    INSERT Item_Factura values (@tipo,@sucursal,@numero,@producto,@cantidad,@precio)
-                END
-            END
-        ELSE
-            INSERT Item_Factura values (@tipo,@sucursal,@numero,@producto,@cantidad,@precio)
-        
-    FETCH C1 INTO @tipo, @sucursal, @numero, @cliente, @fecha, @producto, @precio
-    END
+                IF (@precio < dbo.suma_componentes(@producto))
+                    BEGIN
+                        -- Imprimo lo que me pide y lo inserto
+                        SELECT @fecha, @cliente, @producto, @precio
+                        INSERT Item_Factura VALUES (@tipo, @sucursal, @numero, @cliente, @fecha, @producto, @precio) 
+                    END
+                ELSE
+                INSERT Item_Factura VALUES (@tipo, @sucursal, @numero, @cliente, @fecha, @producto, @precio) -- Si no es menor, tengo que insertarlo ya que el enunciado no aclara que tengo q hacer
+            END     
+     FETCH c1 INTO @tipo, @sucursal, @numero, @cliente, @fecha, @producto, @precio
+     END
+     CLOSE c1
+     DEALLOCATE c1
+
 END
 GO
 
-
-CREATE FUNCTION suma_precio_componentes(@producto char(8)) 
+CREATE FUNCTION suma_componentes (@producto char(8))
 RETURNS numeric(12,4)
 AS
 BEGIN
-    
-    declare @suma numeric(12,4)
-    declare @comp char(8)
-    DECLARE cursorComponentes CURSOR FOR SELECT comp_componente FROM Composicion WHERE comp_producto = @producto
+	DECLARE @suma numeric(12,4), @comp char(8)
+    select @suma = (select isnull(sum(comp_cantidad*prod_precio),0) from composicion join producto on comp_componente = prod_codigo
+                            where comp_producto = @producto)
+    DECLARE cursorComponentes CURSOR FOR (SELECT comp_componente, prod_precio FROM Composicion JOIN Producto ON comp_componente = prod_codigo WHERE comp_producto = @producto )
     OPEN cursorComponentes
-    FETCH cursorComponentes INTO @comp
-    SELECT @suma = (SELECT isnull(SUM(comp_cantidad * prod_precio),0) FROM Composicion JOIN Producto ON comp_componente = prod_codigo WHERE comp_producto = @producto)
+    FETCH cursorComponentes INTO @salario, @comp
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        SELECT @suma = @suma + dbo.suma_precio_componentes(@comp)
-        FETCH cursorComponentes INTO @comp
+        SET @suma = @suma + dbo.suma_componentes(@comp)
+        FETCH cursorComponentes INTO @salario, @comp
     END
     CLOSE cursorComponentes
     DEALLOCATE cursorComponentes
     RETURN @suma
-
-   END
+END
 GO
+
+
 
 --------------
 -- PUNTO 15 --
@@ -431,7 +431,7 @@ BEGIN
         DEALLOCATE cursorComponentes
     END
     ELSE
-        SELECT @suma = prod_precio FROM Producto WHERE prod_codigo = @prod
+        SELECT @suma = prod_precio FROM Producto WHERE prod_codigo = @producto
     
 return @suma
 END
@@ -452,29 +452,33 @@ hasta agotar los depositos posibles. En ultima instancia se dejara stock negativ
 en el ultimo deposito que se desconto.
 */
 
-CREATE TRIGGER actualizar_stock ON Item_Factura AFTER INSERT
+
+CREATE TRIGGER actualizar_stock_venta ON Item_Factura FOR INSERT
 AS
 BEGIN
-    DECLARE @prod char(8), @cantidad numeric(12,2) 
-    DECLARE c1 CURSOR FOR SELECT item_producto, item_cantidad FROM inserted
+    DECLARE @prod char(8), @cantidad decimal(12,2)
+    DECLARE c1 CURSOR FOR (SELECT item_producto, item_cantidad FROM Inserted)
     OPEN c1
     FETCH c1 INTO @prod, @cantidad
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        EXEC descontar_stock_depositos(@prod, @cantidad)
-
+        EXEC descontar_stock_depos(@prod, @cantidad)
         FETCH c1 INTO @prod, @cantidad
     END
+    CLOSE c1
+    DEALLOCATE c1
 END
 GO
 
-CREATE PROCEDURE descontar_stock_depositos(@prod char(8), @cantidad numeric(12,2))
+CREATE PROCEDURE descontar_stock_depos(@prod char(8), @cantidad numeric(12,2))
 as
 BEGIN
-    DECLARE @depo char(2), @cantidad_depo numeric(12,2), @restante numeric(12,2) = @cantidad, @ultimoDeposito char(2)
+    DECLARE @depo char(2), @cantidad_depo numeric(12,2), @restante numeric(12,2), @ultimoDeposito char(2)
     DECLARE cursorDepositos CURSOR FOR SELECT stoc_cantidad, stoc_deposito FROM Stock WHERE stoc_producto = @prod ORDER BY stoc_cantidad DESC
+    SET @restante = @cantidad
     OPEN cursorDepositos
     FETCH cursorDepositos INTO @cantidad_depo, @depo
+
     WHILE @@FETCH_STATUS = 0 AND @restante > 0
     BEGIN
         DECLARE @descuento decimal(12,2) = 
