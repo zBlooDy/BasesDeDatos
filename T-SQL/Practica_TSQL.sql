@@ -640,3 +640,148 @@ go
 -- PUNTO 21 --
 --------------
 
+/*
+Desarrolle el/los elementos de base de datos necesarios para que se cumpla
+automaticamente la regla de que en una factura no puede contener productos de
+diferentes familias. En caso de que esto ocurra no debe grabarse esa factura y
+debe emitirse un error en pantalla.
+*/
+
+CREATE TRIGGER verificar_familia ON Factura FOR INSERT
+AS
+BEGIN
+    DECLARE @tipo char(1), @sucursal char(4), @numero char(8)
+    DECLARE cursorFacturas CURSOR FOR SELECT fact_tipo, fact_numero, fact_sucursal FROM Inserted
+    OPEN cursorFacturas
+    FETCH cursorFacturas INTO @tipo, @sucursal,@numero
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        IF (SELECT COUNT(*) 
+            FROM Item_Factura
+            JOIN Producto ON item_producto = prod_codigo
+            WHERE item_tipo+item_sucursal+item_numero = @tipo+@sucursal+@numero
+            GROUP BY prod_familia) > 1
+        BEGIN
+           -- Tengo que borrar todos los items y despues la factura, esta es otra opcion para ver los que cumplen la condicion
+           delete from item_factura where item_tipo + item_sucursal + item_numero in (
+            select item_tipo + item_sucursal + item_numero
+			from inserted
+				join producto on item_producto = prod_codigo
+			group by item_tipo + item_sucursal + item_numero
+			having count(distinct prod_familia) > 1
+		    )
+            ROLLBACK
+            RAISERROR('La factura tiene items de distintas familias',1,1)
+        END
+
+        FETCH cursorFacturas INTO @tipo, @sucursal,@numero
+
+    END
+    CLOSE cursorFacturas
+    DEALLOCATE cursorFacturas
+END
+GO
+
+--------------
+-- PUNTO 22 --
+--------------
+
+/*
+Se requiere recategorizar los rubros de productos, de forma tal que nigun rubro
+tenga más de 20 productos asignados, si un rubro tiene más de 20 productos
+asignados se deberan distribuir en otros rubros que no tengan mas de 20
+productos y si no entran se debra crear un nuevo rubro en la misma familia con
+la descirpción “RUBRO REASIGNADO”, cree el/los objetos de base de datos
+necesarios para que dicha regla de negocio quede implementada
+*/
+
+-- Lo que interpreto es que RUBRO REASIGNADO no tiene limite de productos, pero tiene que ser tu ultima opcion
+CREATE PROCEDURE recategorizar_rubros 
+AS
+BEGIN
+    DECLARE cursorRubros CURSOR FOR SELECT rubr_id, COUNT(prod_codigo) FROM Rubro JOIN Producto ON prod_rubro = rubr_id GROUP BY rubr_id
+    DECLARE @rubro char(4), @cantidad INT
+    FETCH cursorRubros INTO @rubro, @cantidad
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        IF @cantidad > 20 
+        BEGIN
+            EXEC reasignar_productos_rubro(@rubro, @cantidad)
+        END
+
+
+
+        FETCH cursorRubros INTO @rubro, @cantidad
+
+    END
+END
+GO
+
+
+CREATE PROCEDURE reasignar_productos_rubro (@rubro char(4), @cantidadRubro INT)
+AS
+BEGIN
+    DECLARE cursorProductos CURSOR FOR SELECT prod_codigo FROM Producto WHERE prod_rubro = @rubro
+    DECLARE @prod char(8), @nuevoRubro char(4), @idRubroReasignado char(4)
+    FETCH cursorProductos INTO @prod
+    WHILE @@FETCH_STATUS = 0 OR @cantidadRubro > 20
+    BEGIN
+        SELECT TOP 1 @nuevoRubro=rubr_id FROM Rubro JOIN Producto ON prod_rubro = rubr_id WHERE rubr_detalle <> 'RUBRO REASIGNADO'GROUP BY rubr_id HAVING COUNT(*) < 20 ORDER BY COUNT(*) asc
+        IF @nuevoRubro IS NOT NULL
+        BEGIN
+            UPDATE Producto SET prod_rubro = @nuevoRubro WHERE prod_codigo = @prod
+        END
+        ELSE
+        BEGIN
+            IF NOT EXISTS (SELECT * FROM Rubro WHERE rubr_detalle = 'RUBRO REASIGNADO')
+            BEGIN
+                INSERT INTO Rubro (rubr_detalle) VALUES ('RUBRO REASIGNADO') 
+            END
+            SELECT @idRubroReasignado=rubr_id FROM Rubro WHERE rubr_detalle = 'RUBRO REASIGNADO'
+            UPDATE Producto SET prod_rubro = @idRubroReasignado WHERE prod_codigo = @prod
+        END
+        
+        SET @cantidadRubro -= 1
+        FETCH cursorProductos INTO @prod
+    END
+END
+GO
+
+
+--------------
+-- PUNTO 23 --
+--------------
+
+/*
+Desarrolle el/los elementos de base de datos necesarios para que ante una venta
+automaticamante se controle que en una misma factura no puedan venderse más
+de dos productos con composición. Si esto ocurre debera rechazarse la factura.
+*/
+
+-- Es lo mismo que el ejercicio 21 pero hecho de otra forma, en vez de utilizar cursores lo hago directo con el IF EXISTS
+CREATE TRIGGER verificar_factura_compuesta ON Factura FOR INSERT
+AS
+BEGIN
+    -- Me fijo si existe una factura que tenga mas de 2 items compuestos
+    IF EXISTS (SELECT fact_tipo+fact_numero+fact_sucursal FROM Inserted 
+    JOIN Item_Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
+    JOIN Producto ON item_producto = prod_codigo
+    WHERE prod_codigo IN (SELECT comp_producto FROM Composicion)
+    GROUP BY item_tipo+item_numero+item_sucursal
+    HAVING COUNT(distinct prod_codigo) > 2)
+
+    BEGIN
+        DELETE FROM Item_Factura WHERE item_tipo+item_numero+item_sucursal IN (SELECT item_tipo+item_numero+item_sucursal FROM Item_Factura
+                                                   JOIN Producto ON item_producto = prod_codigo
+                                                   WHERE prod_codigo IN (SELECT comp_producto FROM Composicion)
+                                                   GROUP BY item_tipo+item_numero+item_sucursal
+                                                   HAVING COUNT(distinct prod_codigo) > 2)
+        
+        DELETE FROM Factura WHERE fact_tipo+fact_numero+fact_sucursal IN (SELECT item_tipo+item_numero+item_sucursal FROM Item_Factura
+                                                   JOIN Producto ON item_producto = prod_codigo
+                                                   WHERE prod_codigo IN (SELECT comp_producto FROM Composicion)
+                                                   GROUP BY item_tipo+item_numero+item_sucursal
+                                                   HAVING COUNT(distinct prod_codigo) > 2) 
+
+    END
+END
