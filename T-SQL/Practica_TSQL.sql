@@ -670,7 +670,7 @@ BEGIN
 			group by item_tipo + item_sucursal + item_numero
 			having count(distinct prod_familia) > 1
 		    )
-            ROLLBACK
+            ROLLBACK -- Aca tiro toda la transaccion para atras
             RAISERROR('La factura tiene items de distintas familias',1,1)
         END
 
@@ -929,4 +929,109 @@ BEGIN
     CLOSE cursorDepositos
     DEALLOCATE cursorDepositos
 END
+GO
 
+--------------
+-- PUNTO 28 --
+--------------
+
+/*
+Se requiere reasignar los vendedores a los clientes. Para ello se solicita que
+realice el o los objetos de base de datos necesarios para asignar a cada uno de los
+clientes el vendedor que le corresponda, 
+
+Entendiendo que el vendedor que le corresponde es aquel que le vendio mas facturas a ese cliente, 
+si en particular un cliente no tiene facturas compradas se le debera asignar el vendedor con mas
+venta de la empresa, o sea, el que en monto haya vendido mas.
+*/
+
+
+CREATE PROCEDURE reasignar_vendedores
+AS
+BEGIN
+    DECLARE cursorClientes CURSOR FOR SELECT clie_codigo FROM Cliente 
+    DECLARE @cliente char(6), @nuevoVendedor char(6)
+    OPEN cursorClientes
+    FETCH cursorClientes INTO @cliente
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SELECT TOP 1 @nuevoVendedor=fact_vendedor FROM Factura 
+        WHERE fact_cliente = @cliente
+        GROUP BY fact_vendedor
+        ORDER BY COUNT(*) desc
+
+        IF @nuevoVendedor IS NULL
+            SELECT TOP 1 @nuevoVendedor=fact_vendedor FROM Factura 
+            GROUP BY fact_vendedor 
+            ORDER BY SUM(fact_total) desc
+        
+        UPDATE Cliente SET clie_vendedor = @nuevoVendedor WHERE clie_codigo = @cliente
+
+        FETCH cursorClientes INTO @cliente
+    END
+    CLOSE cursorClientes
+    DEALLOCATE cursorClientes
+END
+GO
+--------------
+-- PUNTO 29 --
+--------------
+
+
+-- No entiendo la consigna
+
+
+--------------
+-- PUNTO 30 --
+--------------
+/*
+Agregar el/los objetos necesarios para crear una regla por la cual un cliente no
+pueda comprar mas de 100 unidades en el mes de ningun producto, si esto
+ocurre no se debera ingresar la operacion y se debera emitir un mensaje 
+
+"Se ha superado el limite maximo de compra de un producto". 
+
+--> Se sabe que esta regla se cumple y que las facturas no pueden ser modificadas.
+*/
+
+CREATE TRIGGER verificar_maximo_unidades ON Factura FOR INSERT
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM Inserted WHERE dbo.supera_maximo(fact_numero, fact_sucursal, fact_tipo, fact_cliente, fact_fecha) = 1)
+        ROLLBACK
+END
+GO
+
+
+-- Interpreto que el enunciado te dice que no podes comprar por ejemplo mas de 100 cocacolas en un mes, osea es por producto
+CREATE FUNCTION supera_maximo(@tipo char(1), @sucursal char(4), @numero char(8), @cliente char(6), @fecha datetime) 
+RETURNS INT
+AS
+BEGIN
+    DECLARE @supera INT = 0, @cantidad numeric(12,2), @producto char(8), @total numeric(12,2)
+    DECLARE cursorItems CURSOR FOR SELECT item_producto, item_cantidad FROM Item_Factura 
+    WHERE @numero+@tipo+@sucursal = item_numero+item_tipo+item_sucursal
+
+    OPEN cursorItems
+    FETCH cursorItems INTO @producto, @cantidad
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+
+        SELECT @total=SUM(item_cantidad) FROM Factura
+        JOIN Item_Factura ON fact_tipo+fact_numero+fact_sucursal = item_tipo+item_numero+item_sucursal 
+        WHERE item_producto = @producto AND fact_cliente = @cliente AND month(fact_fecha) = month(@fecha) AND year(fact_fecha) = year(@fecha)
+
+        IF @total+@cantidad > 100
+        BEGIN
+            PRINT('Se ha superado el limite maximo de compra del producto: ' + @producto)
+            SET @supera = 1
+        END
+
+        FETCH cursorItems INTO @producto, @cantidad
+    END
+    CLOSE cursorItems
+    DEALLOCATE cursorItems
+
+    RETURN @supera
+END
+GO
