@@ -1,6 +1,6 @@
---------------
--- PUNTO 28 --
---------------
+-------------------
+-- PUNTO 28 y 31 --
+-------------------
 
 /*
 Escriba una consulta sql que retorne una estadística por Año y Vendedor que retorne las

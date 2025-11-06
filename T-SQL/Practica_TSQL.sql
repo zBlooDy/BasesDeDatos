@@ -785,3 +785,54 @@ BEGIN
 
     END
 END
+GO
+
+
+--------------
+-- PUNTO 24 --
+--------------
+
+/*
+Se requiere recategorizar los encargados asignados a los depositos. Para ello
+cree el o los objetos de bases de datos necesarios que lo resueva, teniendo en
+cuenta que un deposito no puede tener como encargado un empleado que
+pertenezca a un departamento que no sea de la misma zona que el deposito, 
+
+Si esto ocurre a dicho deposito debera asignársele el empleado con menos
+depositos asignados que pertenezca a un departamento de esa zona.
+*/
+
+CREATE PROCEDURE recategorizar_empleados 
+AS
+BEGIN
+    DECLARE cursorDepositos CURSOR FOR SELECT depo_codigo, depo_zona FROM Empleado 
+    JOIN Deposito ON empl_codigo = depo_encargado
+    JOIN Departamento ON empl_departamento = depa_codigo
+    WHERE depa_zona <> depo_zona
+
+    DECLARE @deposito char(6), @zona char(3)
+    DECLARE @nuevoEncargado char(6)
+    OPEN cursorDepositos
+    FETCH cursorDepositos INTO @deposito, @zona
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SELECT TOP 1 @nuevoEncargado=empl_codigo FROM Empleado
+        JOIN Deposito ON empl_codigo = depo_encargado
+        JOIN Departamento ON empl_departamento = depa_codigo 
+        WHERE depa_zona = @zona
+        GROUP BY empl_codigo
+        ORDER BY COUNT(distinct depo_codigo) asc
+
+
+        UPDATE Deposito SET depo_encargado = @nuevoEncargado WHERE depo_codigo = @deposito
+        
+        
+        FETCH cursorDepositos INTO @deposito
+
+    END
+    CLOSE cursorDepositos
+    DEALLOCATE cursorDepositos
+END
+GO
+

@@ -31,7 +31,7 @@ JOIN Item_Factura ON item_producto = prod_codigo
 JOIN Factura ON item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero
 WHERE prod_envase = enva_codigo AND year(fact_fecha) = year(f.fact_fecha)
 GROUP BY prod_codigo
-ORDER BY COUNT(prod_codigo) desc
+ORDER BY SUM(item_cantidad) desc
 ) 'Prod. mas vendido',
 SUM(item_cantidad * item_precio) '# Total facturado',
 SUM(item_cantidad * item_precio) * 100 / (SELECT SUM(fact_total) FROM Factura WHERE year(fact_fecha) = year(f.fact_fecha)) '% Del año'
