@@ -998,7 +998,17 @@ CREATE TRIGGER verificar_maximo_unidades ON Factura FOR INSERT
 AS
 BEGIN
     IF EXISTS (SELECT * FROM Inserted WHERE dbo.supera_maximo(fact_numero, fact_sucursal, fact_tipo, fact_cliente, fact_fecha) = 1)
-        ROLLBACK
+    BEGIN
+        DELETE FROM Item_Factura 
+        WHERE item_numero+item_sucursal+item_tipo IN (SELECT item_tipo+item_numero+item_sucursal FROM Item_Factura
+                                                        JOIN Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
+                                                        WHERE dbo.supera_maximo(fact_numero, fact_sucursal, fact_tipo, fact_cliente, fact_fecha) = 1)
+        -- DELETE FROM Factura 
+        -- WHERE fact_tipo+fact_numero+fact_sucursal IN (SELECT item_tipo+item_numero+item_sucursal FROM Item_Factura
+        --                                                 JOIN Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
+        --                                                 WHERE dbo.supera_maximo(fact_numero, fact_sucursal, fact_tipo, fact_cliente, fact_fecha) = 1)
+        ROLLBACK -- En teoria dice que "no se debe ingresar la operacion" si se refiere a la factura que incumple se hace lo de arriba. Si se refiere a toda la transaccion se hace esto
+    END
 END
 GO
 
@@ -1008,12 +1018,12 @@ CREATE FUNCTION supera_maximo(@tipo char(1), @sucursal char(4), @numero char(8),
 RETURNS INT
 AS
 BEGIN
-    DECLARE @supera INT = 0, @cantidad numeric(12,2), @producto char(8), @total numeric(12,2)
-    DECLARE cursorItems CURSOR FOR SELECT item_producto, item_cantidad FROM Item_Factura 
+    DECLARE @supera INT = 0, @producto char(8), @total numeric(12,2)
+    DECLARE cursorItems CURSOR FOR SELECT item_producto FROM Item_Factura 
     WHERE @numero+@tipo+@sucursal = item_numero+item_tipo+item_sucursal
 
     OPEN cursorItems
-    FETCH cursorItems INTO @producto, @cantidad
+    FETCH cursorItems INTO @producto
     WHILE @@FETCH_STATUS = 0
     BEGIN
 
@@ -1021,13 +1031,13 @@ BEGIN
         JOIN Item_Factura ON fact_tipo+fact_numero+fact_sucursal = item_tipo+item_numero+item_sucursal 
         WHERE item_producto = @producto AND fact_cliente = @cliente AND month(fact_fecha) = month(@fecha) AND year(fact_fecha) = year(@fecha)
 
-        IF @total+@cantidad > 100
+        IF @total > 100
         BEGIN
             PRINT('Se ha superado el limite maximo de compra del producto: ' + @producto)
             SET @supera = 1
         END
 
-        FETCH cursorItems INTO @producto, @cantidad
+        FETCH cursorItems INTO @producto
     END
     CLOSE cursorItems
     DEALLOCATE cursorItems
