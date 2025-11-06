@@ -26,10 +26,3 @@ WHERE year(fact_fecha) = 2011 AND prod_familia IN (SELECT prod_familia
 													HAVING COUNT(*) > 20 )
 GROUP BY prod_codigo, prod_detalle
 ORDER BY SUM(item_cantidad) desc
-
-SELECT prod_codigo, prod_detalle, SUM(item_cantidad), COUNT(fact_numero), SUM(fact_total)
-FROM Producto
-JOIN Item_Factura on item_producto = prod_codigo
-JOIN Factura ON item_tipo+item_sucursal+item_numero=fact_tipo+fact_sucursal+fact_numero
-group by prod_codigo, prod_detalle
-order by 3
