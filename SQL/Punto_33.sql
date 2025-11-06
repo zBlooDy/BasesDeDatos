@@ -34,3 +34,4 @@ WHERE prod_codigo IN (SELECT comp_componente
                                             GROUP BY item_producto
                                             ORDER BY SUM(item_cantidad) desc))
 GROUP BY prod_codigo, prod_detalle
+ORDER BY SUM(item_cantidad * item_precio)
