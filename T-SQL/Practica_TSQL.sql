@@ -836,3 +836,97 @@ BEGIN
 END
 GO
 
+--------------
+-- PUNTO 25 --
+--------------
+
+/*
+Desarrolle el/los elementos de base de datos necesarios para que no se permita
+que la composición de los productos sea recursiva, o sea, que si el producto A
+compone al producto B, dicho producto B no pueda ser compuesto por el
+producto A, hoy la regla se cumple.
+*/
+
+CREATE TRIGGER verificar_comp ON Composicion FOR INSERT, UPDATE
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM inserted i WHERE dbo.verificar_comp_recursiva(i.comp_producto) = 1)
+        ROLLBACK
+END
+GO
+
+CREATE FUNCTION verificar_comp_recursiva (@producto char(8))
+RETURNS INT
+AS
+BEGIN
+    DECLARE cursorComponentes CURSOR FOR SELECT comp_componente FROM Composicion WHERE comp_producto = @producto
+    DECLARE @componente char(8)
+    DECLARE @recursivo INT = 0
+    OPEN cursorComponentes
+    FETCH cursorComponentes INTO @componente
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        IF EXISTS (SELECT * FROM Composicion WHERE @componente = comp_producto AND comp_componente = @producto)
+            SET @recursivo = 1
+        
+        FETCH cursorComponentes INTO @componente
+    END
+    CLOSE cursorComponentes
+    DEALLOCATE cursorComponentes
+    RETURN @recursivo
+END
+GO
+--------------
+-- PUNTO 26 --
+--------------
+
+/*
+Desarrolle el/los elementos de base de datos necesarios para que se cumpla
+automaticamente la regla de que una factura no puede contener productos que
+sean componentes de otros productos. En caso de que esto ocurra no debe
+grabarse esa factura y debe emitirse un error en pantalla.
+*/
+
+
+
+--------------
+-- PUNTO 27 --
+--------------
+
+/*
+Se requiere reasignar los encargados de stock de los diferentes depósitos. Para
+ello se solicita que realice el o los objetos de base de datos necesarios para
+asignar a cada uno de los depósitos el encargado que le corresponda,
+
+Entendiendo que el encargado que le corresponde es cualquier empleado que no
+es jefe y que no es vendedor, o sea, que no está asignado a ningun cliente, se
+deberán ir asignando tratando de que un empleado solo tenga un deposito
+asignado, en caso de no poder se irán aumentando la cantidad de depósitos
+progresivamente para cada empleado.
+*/
+
+CREATE PROCEDURE reasignar_encargados 
+AS 
+BEGIN
+    -- Depositos que su encargando es vendedor y jefe || Podria simplemente traerme todos los depositos y reasignar todos
+    DECLARE cursorDepositos CURSOR FOR SELECT depo_codigo FROM Deposito 
+                                        WHERE depo_encargado IN (SELECT clie_vendedor FROM Cliente) AND depo_encargado IN (SELECT empl_jefe FROM Empleado)
+    DECLARE @depo char(2), @nuevoEncargado char(6)
+    OPEN cursorDepositos
+    FETCH cursorDepositos INTO @depo
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SELECT TOP 1 @nuevoEncargado=empl_codigo FROM Empleado 
+        LEFT JOIN Deposito ON depo_encargado = empl_codigo
+        WHERE empl_codigo NOT IN (SELECT clie_vendedor FROM Cliente) AND empl_codigo NOT IN (SELECT empl_jefe FROM Empleado)
+        GROUP BY empl_codigo
+        ORDER BY COUNT(*) asc
+
+        UPDATE Deposito SET depo_encargado = @nuevoEncargado WHERE depo_codigo = @depo
+
+        FETCH cursorDepositos INTO @depo
+    END
+    CLOSE cursorDepositos
+    DEALLOCATE cursorDepositos
+END
+
