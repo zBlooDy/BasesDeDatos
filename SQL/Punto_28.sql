@@ -27,8 +27,7 @@ COUNT(distinct fact_cliente) '# Clientes',
 
 (SELECT COUNT(*) FROM Factura 
 JOIN Item_Factura ON item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero
-JOIN Composicion ON item_producto = comp_producto
-WHERE year(f.fact_fecha) = year(fact_fecha) AND fact_vendedor = empl_codigo) '# Prod con comp.',
+WHERE year(f.fact_fecha) = year(fact_fecha) AND fact_vendedor = empl_codigo AND item_producto IN (SELECT comp_producto FROM Composicion)) '# Prod con comp.',
                         
 (SELECT COUNT(*) FROM Factura 
 JOIN Item_Factura ON item_tipo+item_sucursal+item_numero = fact_tipo+fact_sucursal+fact_numero
