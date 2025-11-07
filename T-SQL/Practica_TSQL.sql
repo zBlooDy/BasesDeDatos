@@ -1045,3 +1045,62 @@ BEGIN
     RETURN @supera
 END
 GO
+
+
+-- Otra version tomando el trigger en Item_Factura
+
+CREATE TRIGGER verificar_maximo_unidades_v2 ON Item_Factura FOR INSERT
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM Inserted i JOIN Factura f ON i.item_tipo+i.item_numero+i.item_sucursal = f.fact_tipo+f.fact_numero+f.fact_sucursal
+    WHERE (SELECT SUM(item_cantidad) FROM Item_Factura
+            JOIN Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
+            WHERE i.item_producto = item_producto AND year(fact_fecha) = year(f.fact_fecha) AND month(fact_fecha) = month(f.fact_fecha) AND f.fact_cliente = fact_cliente
+            GROUP BY item_producto)
+            > 100)
+        ROLLBACK
+    
+END
+GO
+
+
+
+
+--------------
+-- PUNTO 31 --
+--------------
+
+/*
+Desarrolle el o los objetos de base de datos necesarios, para que un jefe no pueda
+tener más de 20 empleados a cargo, directa o indirectamente, si esto ocurre
+debera asignarsele un jefe que cumpla esa condición, si no existe un jefe para
+asignarle se le deberá colocar como jefe al gerente general que es aquel que no
+tiene jefe.
+*/
+
+CREATE TRIGGER limitar_jefes ON Empleado FOR INSERT,UPDATE
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM Empleado WHERE dbo.cantidad_empleados(empl_codigo) > 20)
+    BEGIN
+        DECLARE cursorEmpleados CURSOR FOR SELECT empl_codigo FROM Inserted WHERE dbo.cantidad_empleados(empl_jefe) > 20
+        DECLARE @empleado char(6), @nuevoJefe char(6)
+        OPEN cursorEmpleados
+        FETCH cursorEmpleados INTO @empleado
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            SELECT TOP 1 @nuevoJefe=empl_codigo FROM Empleado 
+            WHERE dbo.cantidad_empleados(empl_codigo) < 20 
+            ORDER BY dbo.cantidad_empleados(empl_codigo) asc
+
+            IF @nuevoJefe IS NULL
+                SELECT @nuevoJefe=empl_codigo FROM Empleado WHERE empl_jefe IS NULL
+
+            UPDATE Empleado SET empl_jefe = @nuevoJefe WHERE empl_codigo = @empleado
+
+            FETCH cursorEmpleados INTO @empleado
+        END
+        CLOSE cursorEmpleados
+        DEALLOCATE cursorEmpleados
+    END
+END

@@ -17,7 +17,9 @@ e.Precio promedio facturado de ese producto.
 
 f.Total facturado para ese producto
 
-El resultado deberá ser ordenado por el total vendido por producto para el año 2012.
+El resultado deberá ser ordenado por el total vendido por producto para el año 2012. 
+--> No se entiende muy bien la consigna, yo interprete que es los componentes del producto mas vendido en 2012
+--> Si es para las facturas de 2012 es agregar una condicion en el where y sacarla en la subquery del TOP 1
 */
 
 
