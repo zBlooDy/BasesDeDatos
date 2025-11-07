@@ -647,38 +647,30 @@ diferentes familias. En caso de que esto ocurra no debe grabarse esa factura y
 debe emitirse un error en pantalla.
 */
 
-CREATE TRIGGER verificar_familia ON Factura FOR INSERT
+
+CREATE TRIGGER verificar_familia ON Item_Factura FOR INSERT
 AS
 BEGIN
-    DECLARE @tipo char(1), @sucursal char(4), @numero char(8)
-    DECLARE cursorFacturas CURSOR FOR SELECT fact_tipo, fact_numero, fact_sucursal FROM Inserted
-    OPEN cursorFacturas
-    FETCH cursorFacturas INTO @tipo, @sucursal,@numero
-    WHILE @@FETCH_STATUS = 0
+    IF EXISTS (SELECT * FROM Inserted i 
+    WHERE i.item_tipo+i.item_numero+i.item_sucursal IN (SELECT item_tipo+item_numero+item_sucursal
+                                                        FROM Item_Factura
+                                                        JOIN Producto ON prod_codigo = item_producto
+                                                        GROUP BY item_tipo+item_numero+item_sucursal
+                                                        HAVING COUNT(distinct prod_familia) > 1))
     BEGIN
-        IF (SELECT COUNT(*) 
-            FROM Item_Factura
-            JOIN Producto ON item_producto = prod_codigo
-            WHERE item_tipo+item_sucursal+item_numero = @tipo+@sucursal+@numero
-            GROUP BY prod_familia) > 1
-        BEGIN
-           -- Tengo que borrar todos los items y despues la factura, esta es otra opcion para ver los que cumplen la condicion
-           delete from item_factura where item_tipo + item_sucursal + item_numero in (
-            select item_tipo + item_sucursal + item_numero
-			from inserted
-				join producto on item_producto = prod_codigo
-			group by item_tipo + item_sucursal + item_numero
-			having count(distinct prod_familia) > 1
-		    )
-            ROLLBACK -- Aca tiro toda la transaccion para atras
-            RAISERROR('La factura tiene items de distintas familias',1,1)
-        END
-
-        FETCH cursorFacturas INTO @tipo, @sucursal,@numero
+        PRINT('La factura cuenta con productos de distintas familias, se deshace la misma')
+        DELETE FROM Factura WHERE fact_tipo+fact_sucursal+fact_numero IN (SELECT item_tipo+item_numero+item_sucursal
+                                                        FROM Item_Factura
+                                                        JOIN Producto ON prod_codigo = item_producto
+                                                        GROUP BY item_tipo+item_numero+item_sucursal
+                                                        HAVING COUNT(distinct prod_familia) > 1)
+        DELETE FROM Item_Factura WHERE item_tipo+item_sucursal+item_numero IN (SELECT item_tipo+item_numero+item_sucursal
+                                                        FROM Item_Factura
+                                                        JOIN Producto ON prod_codigo = item_producto
+                                                        GROUP BY item_tipo+item_numero+item_sucursal
+                                                        HAVING COUNT(distinct prod_familia) > 1)
 
     END
-    CLOSE cursorFacturas
-    DEALLOCATE cursorFacturas
 END
 GO
 
@@ -759,18 +751,19 @@ de dos productos con composición. Si esto ocurre debera rechazarse la factura.
 */
 
 -- Es lo mismo que el ejercicio 21 pero hecho de otra forma, en vez de utilizar cursores lo hago directo con el IF EXISTS
-CREATE TRIGGER verificar_factura_compuesta ON Factura FOR INSERT
+CREATE TRIGGER verificar_factura_compuesta ON Item_Factura FOR INSERT
 AS
 BEGIN
     -- Me fijo si existe una factura que tenga mas de 2 items compuestos
-    IF EXISTS (SELECT fact_tipo+fact_numero+fact_sucursal FROM Inserted 
-    JOIN Item_Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
-    JOIN Producto ON item_producto = prod_codigo
-    WHERE prod_codigo IN (SELECT comp_producto FROM Composicion)
-    GROUP BY item_tipo+item_numero+item_sucursal
-    HAVING COUNT(distinct prod_codigo) > 2)
+    IF EXISTS (SELECT * FROM Inserted i
+    WHERE i.item_tipo+i.item_numero+i.item_sucursal IN (SELECT item_tipo+item_numero+item_sucursal FROM Item_Factura
+                                                   JOIN Producto ON item_producto = prod_codigo
+                                                   WHERE prod_codigo IN (SELECT comp_producto FROM Composicion)
+                                                   GROUP BY item_tipo+item_numero+item_sucursal
+                                                   HAVING COUNT(distinct prod_codigo) > 2))
 
     BEGIN
+        PRINT('La factura cuenta con mas de dos productos con composicion, se deshace la misma')
         DELETE FROM Item_Factura WHERE item_tipo+item_numero+item_sucursal IN (SELECT item_tipo+item_numero+item_sucursal FROM Item_Factura
                                                    JOIN Producto ON item_producto = prod_codigo
                                                    WHERE prod_codigo IN (SELECT comp_producto FROM Composicion)
@@ -994,60 +987,8 @@ ocurre no se debera ingresar la operacion y se debera emitir un mensaje
 --> Se sabe que esta regla se cumple y que las facturas no pueden ser modificadas.
 */
 
-CREATE TRIGGER verificar_maximo_unidades ON Factura FOR INSERT
-AS
-BEGIN
-    IF EXISTS (SELECT * FROM Inserted WHERE dbo.supera_maximo(fact_numero, fact_sucursal, fact_tipo, fact_cliente, fact_fecha) = 1)
-    BEGIN
-        DELETE FROM Item_Factura 
-        WHERE item_numero+item_sucursal+item_tipo IN (SELECT item_tipo+item_numero+item_sucursal FROM Item_Factura
-                                                        JOIN Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
-                                                        WHERE dbo.supera_maximo(fact_numero, fact_sucursal, fact_tipo, fact_cliente, fact_fecha) = 1)
-        -- DELETE FROM Factura 
-        -- WHERE fact_tipo+fact_numero+fact_sucursal IN (SELECT item_tipo+item_numero+item_sucursal FROM Item_Factura
-        --                                                 JOIN Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
-        --                                                 WHERE dbo.supera_maximo(fact_numero, fact_sucursal, fact_tipo, fact_cliente, fact_fecha) = 1)
-        ROLLBACK -- En teoria dice que "no se debe ingresar la operacion" si se refiere a la factura que incumple se hace lo de arriba. Si se refiere a toda la transaccion se hace esto
-    END
-END
-GO
 
-
--- Interpreto que el enunciado te dice que no podes comprar por ejemplo mas de 100 cocacolas en un mes, osea es por producto
-CREATE FUNCTION supera_maximo(@tipo char(1), @sucursal char(4), @numero char(8), @cliente char(6), @fecha datetime) 
-RETURNS INT
-AS
-BEGIN
-    DECLARE @supera INT = 0, @producto char(8), @total numeric(12,2)
-    DECLARE cursorItems CURSOR FOR SELECT item_producto FROM Item_Factura 
-    WHERE @numero+@tipo+@sucursal = item_numero+item_tipo+item_sucursal
-
-    OPEN cursorItems
-    FETCH cursorItems INTO @producto
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-
-        SELECT @total=SUM(item_cantidad) FROM Factura
-        JOIN Item_Factura ON fact_tipo+fact_numero+fact_sucursal = item_tipo+item_numero+item_sucursal 
-        WHERE item_producto = @producto AND fact_cliente = @cliente AND month(fact_fecha) = month(@fecha) AND year(fact_fecha) = year(@fecha)
-
-        IF @total > 100
-        BEGIN
-            PRINT('Se ha superado el limite maximo de compra del producto: ' + @producto)
-            SET @supera = 1
-        END
-
-        FETCH cursorItems INTO @producto
-    END
-    CLOSE cursorItems
-    DEALLOCATE cursorItems
-
-    RETURN @supera
-END
-GO
-
-
--- Otra version tomando el trigger en Item_Factura
+-- Version tomando el trigger en Item_Factura
 
 CREATE TRIGGER verificar_maximo_unidades_v2 ON Item_Factura FOR INSERT
 AS
@@ -1058,7 +999,22 @@ BEGIN
             WHERE i.item_producto = item_producto AND year(fact_fecha) = year(f.fact_fecha) AND month(fact_fecha) = month(f.fact_fecha) AND f.fact_cliente = fact_cliente
             GROUP BY item_producto)
             > 100)
-        ROLLBACK
+    BEGIN
+        PRINT('No se permite comprar mas de 100 elementos de un mismo producto en el mes')
+        
+        DELETE FROM Item_Factura WHERE item_tipo+item_numero+item_sucursal IN (SELECT i.item_tipo+i.item_numero+i.item_sucursal FROM Inserted i JOIN Factura f ON i.item_tipo+i.item_numero+i.item_sucursal = f.fact_tipo+f.fact_numero+f.fact_sucursal
+                                                                              WHERE (SELECT SUM(item_cantidad) FROM Item_Factura
+                                                                                    JOIN Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
+                                                                                    WHERE i.item_producto = item_producto AND year(fact_fecha) = year(f.fact_fecha) AND month(fact_fecha) = month(f.fact_fecha) AND f.fact_cliente = fact_cliente
+                                                                                    GROUP BY item_producto) > 100)  
+
+        DELETE FROM Factura WHERE fact_tipo+fact_numero+fact_sucursal IN (SELECT i.item_tipo+i.item_numero+i.item_sucursal FROM Inserted i JOIN Factura f ON i.item_tipo+i.item_numero+i.item_sucursal = f.fact_tipo+f.fact_numero+f.fact_sucursal
+                                                                              WHERE (SELECT SUM(item_cantidad) FROM Item_Factura
+                                                                                    JOIN Factura ON item_tipo+item_numero+item_sucursal = fact_tipo+fact_numero+fact_sucursal
+                                                                                    WHERE i.item_producto = item_producto AND year(fact_fecha) = year(f.fact_fecha) AND month(fact_fecha) = month(f.fact_fecha) AND f.fact_cliente = fact_cliente
+                                                                                    GROUP BY item_producto) > 100)  
+
+    END
     
 END
 GO
