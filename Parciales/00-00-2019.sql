@@ -54,7 +54,7 @@ BEGIN
 
 	DECLARE @producto char(8), @cant numeric(12,2), @numero char(8), @tipo char(1), @sucursal char(4)
 	OPEN cursorItems
-	FETCH cursorItems INTO @producto, @cantidad, @numero, @sucursal, @tipo
+	FETCH cursorItems INTO @producto, @cant, @numero, @sucursal, @tipo
 	WHILE @@FETCH_STATUS = 0
 	BEGIN
 		DECLARE cursorComponentes CURSOR FOR SELECT comp_componente, comp_cantidad, prod_precio FROM Composicion JOIN Producto ON comp_componente = prod_codigo WHERE comp_producto = @producto
@@ -62,7 +62,7 @@ BEGIN
 		FETCH cursorComponentes INTO @componente, @cantidad_comp, @precio
 		WHILE @@FETCH_STATUS = 0
 		BEGIN
-			INSERT Item_Factura VALUES (@tipo, @sucursal, @numero, @componente, @cantidad_comp * @cantidad_comp, @cantidad_comp * @precio)
+			INSERT Item_Factura VALUES (@tipo, @sucursal, @numero, @componente, @cant * @cantidad_comp, @cantidad_comp * @precio)
 			FETCH cursorComponentes INTO @componente, @cantidad_comp, @precio
 		END
 		CLOSE cursorComponentes
@@ -71,7 +71,7 @@ BEGIN
 		-- Borro el compuesto
 		DELETE FROM Item_Factura WHERE item_tipo+item_numero+item_sucursal = @tipo+@numero+@sucursal AND item_producto = @producto
 	    
-		FETCH cursorItems INTO @producto, @cantidad, @numero, @sucursal, @tipo
+		FETCH cursorItems INTO @producto, @cant, @numero, @sucursal, @tipo
 
 	END
 	CLOSE cursorItems
