@@ -3,13 +3,13 @@
 ---------
 
 /* 1. Realizar una consulta que muestre, para los clientes que compraron 
-únicamente en años pares, la siguiente información: 
+Ãºnicamente en aÃ±os pares, la siguiente informaciÃ³n: 
     - El numero de fila
     - el codigo de cliente
-    - el nombre del producto más comprado por el cliente
-    - la cantidad total comprada por el cliente en el último año
+    - el nombre del producto mÃ¡s comprado por el cliente
+    - la cantidad total comprada por el cliente en el Ãºltimo aÃ±o
 
-El resultado debe estar ordenado en función de la cantidad máxima comprada por cliente
+El resultado debe estar ordenado en funciÃ³n de la cantidad mÃ¡xima comprada por cliente
 de mayor a menor    
 */ 
 
@@ -30,7 +30,8 @@ WHERE fact_cliente = f.fact_cliente AND year(fact_fecha) = (SELECT MAX(year(fact
 
 FROM Factura f
 JOIN Item_Factura ON f.fact_numero+f.fact_tipo+f.fact_sucursal = item_numero+item_tipo+item_sucursal
-WHERE year(fact_fecha) % 2 = 0
+WHERE f.fact_cliente NOT IN (SELECT fact_cliente FROM Factura
+                    WHERE year(fact_fecha) % 2 <> 0 )
 GROUP BY f.fact_cliente
 ORDER BY SUM(item_cantidad) desc
 
@@ -44,7 +45,7 @@ GO
 Implementar un sistema de auditoria para registrar cada operacion realizada en la tabla 
 cliente. El sistema debera almacenar, como minimo, los valores(campos afectados), el tipo 
 de operacion a realizar, y la fecha y hora de ejecucion. SOlo se permitiran operaciones individuales
-(no masivas) sobre los registros, pero el intento de realizar operaciones masivas deberá ser registrado
+(no masivas) sobre los registros, pero el intento de realizar operaciones masivas deberÃ¡ ser registrado
 en el sistema de auditoria
 */
 CREATE TABLE AUDITORIA(
